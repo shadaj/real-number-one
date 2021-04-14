@@ -6,7 +6,7 @@ from os.path import basename, normpath
 import glob
 
 import os
-from mip import Model, CONTINUOUS, BINARY, maximize, xsum, INT_MAX
+from mip import Model, CONTINUOUS, BINARY, maximize, xsum
 
 def solve(G: nx.Graph, max_c, max_k):
     """
@@ -20,20 +20,20 @@ def solve(G: nx.Graph, max_c, max_k):
     model.threads = int(os.getenv("THREAD_COUNT", "24"))
     model.max_mip_gap = 1e-15
 
-    flow_over_edge = [[model.add_var(var_type=BINARY) for j in G] for i in G]
-    # is_untakeable_edge = [[model.add_var(var_type=BINARY) for j in G] for i in G]
+    skipped_nodes = [model.add_var(var_type=BINARY) for node in G]
+
+    flow_over_edge = [[model.add_var(var_type=CONTINUOUS) for j in G] for i in G]
+    is_untakeable_edge = [[model.add_var(var_type=BINARY) for j in G] for i in G]
     # no flow over nonexistent edges
     for i in G:
         for j in G:
             if not G.has_edge(i, j):
                 model += flow_over_edge[i][j] == 0
-                # model += is_untakeable_edge[i][j] == 1
+                model += is_untakeable_edge[i][j] == 1
 
-    model += xsum(flow_over_edge[0][other_node] for other_node in G) == 1
-    model += xsum(flow_over_edge[other_node][len(G) - 1] for other_node in G) == 1
+    model += xsum(flow_over_edge[0][other_node] for other_node in G) == (len(G) - 1) - xsum(skipped_nodes)
     for other_node in G:
         model += flow_over_edge[other_node][0] == 0
-        model += flow_over_edge[len(G) - 1][other_node] == 0
 
     distance_to_node = [model.add_var(var_type=CONTINUOUS) for node in G]
     model += distance_to_node[0] == 0
@@ -42,23 +42,22 @@ def solve(G: nx.Graph, max_c, max_k):
     # so a fake_infinity will never be better than any other option
     fake_infinity = sum([weight for _, _, weight in G.edges().data("weight")])
     skipped_edges = []
-    skipped_nodes = [model.add_var(var_type=BINARY) for node in G]
     model += skipped_nodes[0] == 0
     model += skipped_nodes[len(G) - 1] == 0
 
     for node_a, node_b, weight in G.edges().data("weight"):
         edge_skip_var = model.add_var(var_type=BINARY)
         skipped_edges.append((edge_skip_var, (node_a, node_b)))
-        # model += is_untakeable_edge[node_a][node_b] >= edge_skip_var
-        # model += is_untakeable_edge[node_a][node_b] >= skipped_nodes[node_a]
-        # model += is_untakeable_edge[node_a][node_b] >= skipped_nodes[node_b]
-        # model += is_untakeable_edge[node_a][node_b] <= edge_skip_var + skipped_nodes[node_a] + skipped_nodes[node_b]
-        # is_untakeable_edge[node_b][node_a] = is_untakeable_edge[node_a][node_b]
-        # is_untakeable = is_untakeable_edge[node_a][node_b]
-        # overall_range = 1
+        model += is_untakeable_edge[node_a][node_b] >= edge_skip_var
+        model += is_untakeable_edge[node_a][node_b] >= skipped_nodes[node_a]
+        model += is_untakeable_edge[node_a][node_b] >= skipped_nodes[node_b]
+        model += is_untakeable_edge[node_a][node_b] <= edge_skip_var + skipped_nodes[node_a] + skipped_nodes[node_b]
+        is_untakeable_edge[node_b][node_a] = is_untakeable_edge[node_a][node_b]
+        is_untakeable = is_untakeable_edge[node_a][node_b]
+        overall_range = 1
 
-        is_untakeable = edge_skip_var + skipped_nodes[node_a] + skipped_nodes[node_b]
-        overall_range = 3
+        # is_untakeable = edge_skip_var + skipped_nodes[node_a] + skipped_nodes[node_b]
+        # overall_range = 3
 
         model += distance_to_node[node_a] <= distance_to_node[node_b] + weight + is_untakeable * fake_infinity # still need the term because otherwise no node can be skipped
         model += distance_to_node[node_b] <= distance_to_node[node_a] + weight + is_untakeable * fake_infinity # still need the term because otherwise no node can be skipped
@@ -68,29 +67,24 @@ def solve(G: nx.Graph, max_c, max_k):
         # model += edge_skip_var <= 1 - skipped_nodes[node_b]
 
         # no flow if edge or node removed
-        model += flow_over_edge[node_a][node_b] * overall_range <= overall_range - is_untakeable
-        model += flow_over_edge[node_b][node_a] * overall_range <= overall_range - is_untakeable
+        model += flow_over_edge[node_a][node_b] <= (len(G) - 1) - is_untakeable * ((len(G) - 1) / overall_range)
+        model += flow_over_edge[node_b][node_a] <= (len(G) - 1) - is_untakeable * ((len(G) - 1) / overall_range)
 
     # actually makes performance worse
     # for node in G:
     #     # immediately force the distance to infinity if we skip the node
-    #     model += distance_to_node[node] >= skipped_nodes[node] * fake_infinity 
+    #     model += distance_to_node[node] >= skipped_nodes[node] * fake_infinity
 
     for node in G:
-        if node != 0 and node != (len(G) - 1):
+        if node != 0:
             flow_into_node = xsum(flow_over_edge[other_node][node] for other_node in G)
             flow_out_of_node = xsum(flow_over_edge[node][other_node] for other_node in G)
-            model += flow_into_node == flow_out_of_node
-            # model += xsum([(1 - is_untakeable_edge[from_node][node]) for from_node in G]) >= flow_into_node
-            # model += xsum([(1 - is_untakeable_edge[from_node][node]) for from_node in G]) >= flow_out_of_node
-            # seems to make performance worse
-            # model += flow_into_node <= 1
-            # model += flow_out_of_node <= 1
+            model += flow_into_node - flow_out_of_node == 1 - skipped_nodes[node]
 
     model += xsum([var for var, _ in skipped_edges]) <= max_k
     model += xsum(skipped_nodes) <= max_c
-    for node in G:
-        model += distance_to_node[node] <= fake_infinity
+    # for node in G:
+    #     model += distance_to_node[node] <= fake_infinity
 
     if True: # don't match flow to shortest path
         model.objective = maximize(distance_to_node[len(G) - 1])
@@ -104,7 +98,8 @@ def solve(G: nx.Graph, max_c, max_k):
             for i in G
         ]))
 
-    model.emphasis = 2
+    # model.solver.set_int_param("MIPFocus", 3)
+    model.preprocess = 2
     status = model.optimize()
     if model.num_solutions > 0:
         c = []
