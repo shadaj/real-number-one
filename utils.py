@@ -43,5 +43,6 @@ def calculate_score(G, c, k):
     H.remove_edges_from(k)
     H.remove_nodes_from(c)
     final_min_dist = nx.dijkstra_path_length(H, 0, node_count-1)
+    print("Final Min Distance: {}".format(final_min_dist))
     difference = final_min_dist - original_min_dist
     return difference
