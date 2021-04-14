@@ -18,18 +18,17 @@ def solve(G: nx.Graph, max_c, max_k):
     """
     model = Model()
     model.threads = int(os.getenv("THREAD_COUNT", "24"))
-    model.max_mip_gap = 1e-15
+    model.max_mip_gap_abs = 0.0001
 
     skipped_nodes = [model.add_var(var_type=BINARY) for node in G]
 
     flow_over_edge = [[model.add_var(var_type=CONTINUOUS) for j in G] for i in G]
-    is_untakeable_edge = [[model.add_var(var_type=BINARY) for j in G] for i in G]
+
     # no flow over nonexistent edges
     for i in G:
         for j in G:
             if not G.has_edge(i, j):
                 model += flow_over_edge[i][j] == 0
-                model += is_untakeable_edge[i][j] == 1
 
     model += xsum(flow_over_edge[0][other_node] for other_node in G) == (len(G) - 1) - xsum(skipped_nodes)
     for other_node in G:
@@ -48,32 +47,20 @@ def solve(G: nx.Graph, max_c, max_k):
     for node_a, node_b, weight in G.edges().data("weight"):
         edge_skip_var = model.add_var(var_type=BINARY)
         skipped_edges.append((edge_skip_var, (node_a, node_b)))
-        model += is_untakeable_edge[node_a][node_b] >= edge_skip_var
-        model += is_untakeable_edge[node_a][node_b] >= skipped_nodes[node_a]
-        model += is_untakeable_edge[node_a][node_b] >= skipped_nodes[node_b]
-        model += is_untakeable_edge[node_a][node_b] <= edge_skip_var + skipped_nodes[node_a] + skipped_nodes[node_b]
-        is_untakeable_edge[node_b][node_a] = is_untakeable_edge[node_a][node_b]
-        is_untakeable = is_untakeable_edge[node_a][node_b]
-        overall_range = 1
+        model += edge_skip_var >= skipped_nodes[node_a]
+        model += edge_skip_var >= skipped_nodes[node_b]
 
-        # is_untakeable = edge_skip_var + skipped_nodes[node_a] + skipped_nodes[node_b]
-        # overall_range = 3
-
-        model += distance_to_node[node_a] <= distance_to_node[node_b] + weight + is_untakeable * fake_infinity # still need the term because otherwise no node can be skipped
-        model += distance_to_node[node_b] <= distance_to_node[node_a] + weight + is_untakeable * fake_infinity # still need the term because otherwise no node can be skipped
-
-        # optional, also handled by post-processing
-        model += edge_skip_var <= 1 - skipped_nodes[node_a]
-        model += edge_skip_var <= 1 - skipped_nodes[node_b]
+        model += distance_to_node[node_a] <= distance_to_node[node_b] + weight + edge_skip_var * fake_infinity
+        model += distance_to_node[node_b] <= distance_to_node[node_a] + weight + edge_skip_var * fake_infinity
 
         # no flow if edge or node removed
-        model += flow_over_edge[node_a][node_b] <= (len(G) - 1) - is_untakeable * ((len(G) - 1) / overall_range)
-        model += flow_over_edge[node_b][node_a] <= (len(G) - 1) - is_untakeable * ((len(G) - 1) / overall_range)
+        model += flow_over_edge[node_a][node_b] <= (len(G) - 1) - edge_skip_var * (len(G) - 1)
+        model += flow_over_edge[node_b][node_a] <= (len(G) - 1) - edge_skip_var * (len(G) - 1)
 
-    # actually makes performance worse
-    for node in G:
-        # immediately force the distance to infinity if we skip the node
-        model += distance_to_node[node] >= skipped_nodes[node] * fake_infinity
+    # results in binary variable leakage
+    # for node in G:
+    #     # immediately force the distance to infinity if we skip the node
+    #     model += distance_to_node[node] >= skipped_nodes[node] * fake_infinity
 
     for node in G:
         if node != 0:
@@ -81,25 +68,13 @@ def solve(G: nx.Graph, max_c, max_k):
             flow_out_of_node = xsum(flow_over_edge[node][other_node] for other_node in G)
             model += flow_into_node - flow_out_of_node == 1 - skipped_nodes[node]
 
-    model += xsum([var for var, _ in skipped_edges]) <= max_k
+    model += xsum([var for var, _ in skipped_edges]) - xsum([skipped_nodes[i] * len(G[i]) for i in G]) <= max_k
     model += xsum(skipped_nodes) <= max_c
     for node in G:
         model += distance_to_node[node] <= fake_infinity
 
-    if True: # don't match flow to shortest path
-        model.objective = maximize(distance_to_node[len(G) - 1])
-    else:
-        model += xsum([
-            xsum([flow_over_edge[i][j] * G[i][j]["weight"] for j in G if G.has_edge(i, j)])
-            for i in G
-        ]) == distance_to_node[len(G) - 1]
-        model.objective = maximize(xsum([
-            xsum([flow_over_edge[i][j] * G[i][j]["weight"] for j in G if G.has_edge(i, j)])
-            for i in G
-        ]))
+    model.objective = maximize(distance_to_node[len(G) - 1])
 
-    # model.solver.set_int_param("MIPFocus", 3)
-    model.preprocess = 2
     status = model.optimize()
     if model.num_solutions > 0:
         c = []
