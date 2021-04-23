@@ -16,6 +16,7 @@ from typing import List, Tuple, Any
 @dataclass(order=True)
 class PrioritizedItem:
     timeout: int
+    gap_change: float
     gap: float
     item: Any=field(compare=False)
 
@@ -56,7 +57,7 @@ def runner(input_dir="inputs", output_dir="outputs", input_type=None):
   for input_path, max_cities, max_edges in inputs:
     cached = get_cached_run(input_path)
     if cached == None:
-      heapq.heappush(to_run_heap, PrioritizedItem(0, 100, {
+      heapq.heappush(to_run_heap, PrioritizedItem(0, 0, 100, {
         "in_path": input_path,
         "out_path": 'outputs/' + input_path[6:][:-3] + '.out',
         "existing_solution": None,
@@ -64,12 +65,18 @@ def runner(input_dir="inputs", output_dir="outputs", input_type=None):
         "max_edges": max_edges,
         "last_timeout": 5,
         "is_optimal": False,
-        "best_gap": 100
+        "best_gap": 100,
+        "gap_change": 0
       }))
       non_optimal_count += 1
       total_gaps += 100
     elif not cached["is_optimal"]:
-      heapq.heappush(to_run_heap, PrioritizedItem(cached["last_timeout"], cached["best_gap"], cached))
+      heapq.heappush(to_run_heap, PrioritizedItem(
+        cached["last_timeout"],
+        cached["gap_change"] if "gap_change" in cached else 0,
+        cached["best_gap"],
+        cached
+      ))
       non_optimal_count += 1
       total_gaps += cached["best_gap"]
     else:
@@ -114,12 +121,13 @@ def runner(input_dir="inputs", output_dir="outputs", input_type=None):
         "max_edges": next_task["max_edges"],
         "last_timeout": next_timeout,
         "is_optimal": (solve_result != None) and solve_result[2],
-        "best_gap": min(new_gap, next_task["best_gap"])
+        "best_gap": min(new_gap, next_task["best_gap"]),
+        "gap_change": new_gap - next_task["best_gap"]
       }
 
       write_cached_run(new_task["in_path"], new_task)
       if not new_task["is_optimal"]:
-        heapq.heappush(to_run_heap, PrioritizedItem(next_timeout, new_task["best_gap"], new_task))
+        heapq.heappush(to_run_heap, PrioritizedItem(next_timeout, new_task["gap_change"], new_task["best_gap"], new_task))
 
 if __name__ == '__main__':
   fire.Fire(runner)
