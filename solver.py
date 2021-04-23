@@ -7,8 +7,9 @@ import glob
 
 import os
 from mip import Model, CONTINUOUS, BINARY, maximize, xsum
+from mip.constants import OptimizationStatus
 
-def solve(G: nx.Graph, max_c, max_k):
+def solve(G: nx.Graph, max_c, max_k, timeout, existing_solution):
     """
     Args:
         G: networkx.Graph
@@ -41,6 +42,7 @@ def solve(G: nx.Graph, max_c, max_k):
     # so a fake_infinity will never be better than any other option
     fake_infinity = sum([weight for _, _, weight in G.edges().data("weight")])
     skipped_edges = []
+    skipped_edge_map = {}
     model += skipped_nodes[0] == 0
     model += skipped_nodes[len(G) - 1] == 0
 
@@ -58,9 +60,10 @@ def solve(G: nx.Graph, max_c, max_k):
         model += flow_over_edge[node_b][node_a] <= (len(G) - 1) - edge_skip_var * (len(G) - 1)
 
     # results in binary variable leakage
-    # for node in G:
-    #     # immediately force the distance to infinity if we skip the node
-    #     model += distance_to_node[node] >= skipped_nodes[node] * fake_infinity
+    for node in G:
+        # immediately force the distance to infinity if we skip the node
+        model += distance_to_node[node] >= skipped_nodes[node] * fake_infinity
+        model += distance_to_node[node] <= (1 - skipped_nodes[node]) * 1e12 + skipped_nodes[node] * fake_infinity
 
     for node in G:
         if node != 0:
@@ -74,8 +77,20 @@ def solve(G: nx.Graph, max_c, max_k):
         model += distance_to_node[node] <= fake_infinity
 
     model.objective = maximize(distance_to_node[len(G) - 1])
+    # model.solver.set_int_param("FlowCoverCuts", 2)
+    # model.solver.set_int_param("IntegralityFocus", 1)
 
-    status = model.optimize()
+    if existing_solution:
+        solution_variables = []
+        for node in G:
+            solution_variables.append((skipped_nodes[node], 1.0 if node in existing_solution[0] else 0.0))
+        for edge_var, edge in skipped_edges:
+            is_skipped = (edge in existing_solution[1]) or ((edge[1], edge[0]) in existing_solution[1]) or \
+                         (edge[0] in existing_solution[0]) or (edge[1] in existing_solution[0])
+            solution_variables.append((edge_var, 1.0 if is_skipped else 0.0))
+        model.start = solution_variables
+
+    status = model.optimize(max_seconds=timeout)
     if model.num_solutions > 0:
         c = []
         for node in G:
@@ -85,7 +100,9 @@ def solve(G: nx.Graph, max_c, max_k):
         for skip_var, edge in skipped_edges:
             if skip_var.x > 0.99 and not ((edge[0] in c) or (edge[1] in c)):
                 k.append(edge)
-        return c, k
+        return c, k, status == OptimizationStatus.OPTIMAL, model.gap
+    else:
+        return None
 
 
 # Here's an example of how to run your solver.
