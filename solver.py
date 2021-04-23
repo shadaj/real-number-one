@@ -77,8 +77,9 @@ def solve(G: nx.Graph, max_c, max_k, timeout, existing_solution):
         model += distance_to_node[node] <= fake_infinity
 
     model.objective = maximize(distance_to_node[len(G) - 1])
+    # these cuts are used more often but aggressively using them doesn't seem to help
     # model.solver.set_int_param("FlowCoverCuts", 2)
-    # model.solver.set_int_param("IntegralityFocus", 1)
+    # model.solver.set_int_param("MIRCuts", 2)
 
     if existing_solution:
         solution_variables = []

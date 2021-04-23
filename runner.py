@@ -15,7 +15,8 @@ from typing import List, Tuple, Any
 
 @dataclass(order=True)
 class PrioritizedItem:
-    priority: int
+    timeout: int
+    gap: float
     item: Any=field(compare=False)
 
 size_mapping = {
@@ -55,7 +56,7 @@ def runner(input_dir="inputs", output_dir="outputs", input_type=None):
   for input_path, max_cities, max_edges in inputs:
     cached = get_cached_run(input_path)
     if cached == None:
-      heapq.heappush(to_run_heap, PrioritizedItem(0, {
+      heapq.heappush(to_run_heap, PrioritizedItem(0, 100, {
         "in_path": input_path,
         "out_path": 'outputs/' + input_path[6:][:-3] + '.out',
         "existing_solution": None,
@@ -68,7 +69,7 @@ def runner(input_dir="inputs", output_dir="outputs", input_type=None):
       non_optimal_count += 1
       total_gaps += 100
     elif not cached["is_optimal"]:
-      heapq.heappush(to_run_heap, PrioritizedItem(cached["last_timeout"], cached))
+      heapq.heappush(to_run_heap, PrioritizedItem(cached["last_timeout"], cached["best_gap"], cached))
       non_optimal_count += 1
       total_gaps += cached["best_gap"]
     else:
@@ -118,7 +119,7 @@ def runner(input_dir="inputs", output_dir="outputs", input_type=None):
 
       write_cached_run(new_task["in_path"], new_task)
       if not new_task["is_optimal"]:
-        heapq.heappush(to_run_heap, PrioritizedItem(next_timeout, new_task))
+        heapq.heappush(to_run_heap, PrioritizedItem(next_timeout, new_task["best_gap"], new_task))
 
 if __name__ == '__main__':
   fire.Fire(runner)
