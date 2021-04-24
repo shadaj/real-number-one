@@ -13,12 +13,31 @@ from os.path import exists, basename, normpath
 from dataclasses import dataclass, field
 from typing import List, Tuple, Any
 
-@dataclass(order=True)
+@dataclass
 class PrioritizedItem:
-  gap_change: float
-  timeout: int
-  gap: float
   item: Any=field(compare=False)
+
+  @property
+  def estimated_timeout_to_complete(self):
+    if self.item["existing_solution"] == None:
+      return self.item["last_timeout"] * 2, self.item["last_timeout"] * 2
+    elif abs(self.item["gap_change"]) <= 0.0001 or self.item["gap_change"] > 0:
+      return self.item["last_timeout"] * 2, self.item["last_timeout"] * 2
+    else:
+      seconds_per_change = self.item["timeout_change"] / -self.item["gap_change"]
+      time_for_remaining_gap = self.item["best_gap"] * seconds_per_change
+      return round(self.item["last_timeout"] + time_for_remaining_gap), round(self.item["last_timeout"] + time_for_remaining_gap * 2)
+
+  @property
+  def priority_func(self):
+    tight_estimate, _ = self.estimated_timeout_to_complete
+    return (tight_estimate, self.item["last_timeout"], self.item["best_gap"])
+  
+  def __eq__(self, o: "PrioritizedItem") -> bool:
+    return self.priority_func == o.priority_func
+
+  def __lt__(self, o: "PrioritizedItem") -> bool:
+    return self.priority_func < o.priority_func
 
 size_mapping = {
   "small": (1, 15),
@@ -57,7 +76,7 @@ def runner(input_dir="inputs", output_dir="outputs", input_type=None):
   for input_path, max_cities, max_edges in inputs:
     cached = get_cached_run(input_path)
     if cached == None:
-      heapq.heappush(to_run_heap, PrioritizedItem(0, 5, 100, {
+      heapq.heappush(to_run_heap, PrioritizedItem({
         "in_path": input_path,
         "out_path": 'outputs/' + input_path[6:][:-3] + '.out',
         "existing_solution": None,
@@ -66,34 +85,38 @@ def runner(input_dir="inputs", output_dir="outputs", input_type=None):
         "last_timeout": 5,
         "is_optimal": False,
         "best_gap": 100,
-        "gap_change": 0
+        "gap_change": 0,
+        "timeout_change": 0
       }))
       non_optimal_count += 1
       total_gaps += 100
     elif not cached["is_optimal"]:
-      heapq.heappush(to_run_heap, PrioritizedItem(
-        cached["gap_change"] if "gap_change" in cached else 0,
-        cached["last_timeout"],
-        cached["best_gap"],
-        cached
-      ))
+      if "gap_change" not in cached:
+        cached["gap_change"] = 0
+      if "timeout_change" not in cached:
+        cached["timeout_change"] = cached["last_timeout"] / 2
+      heapq.heappush(to_run_heap, PrioritizedItem(cached))
       non_optimal_count += 1
       total_gaps += cached["best_gap"]
     else:
       total_gaps += 0
 
   while len(to_run_heap) > 0:
-    next_task = heapq.heappop(to_run_heap).item
+    next_task_wrap = heapq.heappop(to_run_heap)
+    next_task = next_task_wrap.item
     if not next_task["is_optimal"]:
       G = read_input_file(next_task["in_path"])
-      next_timeout = next_task["last_timeout"] * 2
+      _, next_timeout = next_task_wrap.estimated_timeout_to_complete
+      timeout_delta = next_timeout - next_task["last_timeout"]
+      last_progress = next_task["gap_change"]
       in_path = next_task["in_path"]
       print()
       print()
       print("-----------------------------------------------------------")
       print()
       print()
-      print(f"Running {in_path} with timeout {next_timeout} (remaining non-optimal: {non_optimal_count}/{len(inputs)}, average gap: {(total_gaps / non_optimal_count) * 100:.2f}%)")
+      print(f"Remaining non-optimal: {non_optimal_count}/{len(inputs)}, average gap: {(total_gaps / non_optimal_count) * 100:.2f}%")
+      print(f"Running {in_path} with timeout {next_timeout}, last iteration progress {last_progress*100:.2f}%")
       print()
       solve_result = solve(
         G, next_task["max_cities"], next_task["max_edges"],
@@ -122,12 +145,13 @@ def runner(input_dir="inputs", output_dir="outputs", input_type=None):
         "last_timeout": next_timeout,
         "is_optimal": (solve_result != None) and solve_result[2],
         "best_gap": min(new_gap, next_task["best_gap"]),
-        "gap_change": new_gap - next_task["best_gap"]
+        "gap_change": min(new_gap, next_task["best_gap"]) - next_task["best_gap"],
+        "timeout_change": timeout_delta
       }
 
       write_cached_run(new_task["in_path"], new_task)
       if not new_task["is_optimal"]:
-        heapq.heappush(to_run_heap, PrioritizedItem(new_task["gap_change"], next_timeout, new_task["best_gap"], new_task))
+        heapq.heappush(to_run_heap, PrioritizedItem(new_task))
 
 if __name__ == '__main__':
   fire.Fire(runner)
