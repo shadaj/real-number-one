@@ -20,9 +20,9 @@ class PrioritizedItem:
   @property
   def estimated_timeout_to_complete(self):
     if self.item["existing_solution"] == None:
-      return self.item["last_timeout"] * 2, self.item["last_timeout"] * 2
+      return self.item["last_timeout"] * 4, self.item["last_timeout"] * 4
     elif abs(self.item["gap_change"]) <= 0.0001 or self.item["gap_change"] > 0:
-      return self.item["last_timeout"] * 2, self.item["last_timeout"] * 2
+      return self.item["last_timeout"] * 4, self.item["last_timeout"] * 4
     else:
       seconds_per_change = self.item["timeout_change"] / -self.item["gap_change"]
       time_for_remaining_gap = self.item["best_gap"] * seconds_per_change
