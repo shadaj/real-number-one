@@ -68,7 +68,7 @@ def write_cached_run(input_path: str, result):
   with open(cache_path, "wb") as cache_file:
     return pickle.dump(result, cache_file)
 
-def runner(input_dir="inputs", output_dir="outputs", input_type=None):
+def solver_loop(input_dir="inputs", output_dir="outputs", input_type=None):
   inputs = get_all_inputs(input_dir, input_type)
   to_run_heap = []
   non_optimal_count = 0
@@ -153,5 +153,36 @@ def runner(input_dir="inputs", output_dir="outputs", input_type=None):
       if not new_task["is_optimal"]:
         heapq.heappush(to_run_heap, PrioritizedItem(new_task))
 
+def stats(input_dir="inputs", input_type = None):
+  import matplotlib.pyplot as plt
+  import seaborn as sns
+
+  inputs = get_all_inputs(input_dir, input_type)
+  cached_runs = []
+  for input_path, max_cities, max_edges in inputs:
+    cached = get_cached_run(input_path)
+    if cached:
+      if "gap_change" not in cached:
+        cached["gap_change"] = 0
+      if "timeout_change" not in cached:
+        cached["timeout_change"] = cached["last_timeout"] / 2
+      cached_runs.append(cached)
+
+  print(f"Total Inputs: {len(inputs)}")    
+  print(f"Total Runned Inputs: {len(cached_runs)}")
+  optimal_runs = [run for run in cached_runs if run["is_optimal"]]
+  non_optimal_runs = [run for run in cached_runs if not run["is_optimal"]]
+  has_solution = [run for run in cached_runs if run["existing_solution"]]
+  print(f"Optimal Count: {len(optimal_runs)}")
+  print(f"Has Solution: {len(has_solution)}")
+
+  plt.hist([run["last_timeout"] for run in optimal_runs], bins=25)
+  plt.savefig('optimal-timeouts.png')
+  plt.clf()
+
+  plt.hist([run["best_gap"] * 100 for run in non_optimal_runs], bins=25)
+  plt.savefig('gaps.png')
+  plt.clf()
+
 if __name__ == '__main__':
-  fire.Fire(runner)
+  fire.Fire()

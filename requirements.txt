@@ -3,3 +3,5 @@ mip
 networkx
 numpy
 fire
+matplotlib
+seaborn
