@@ -185,5 +185,7 @@ def stats(input_dir="inputs", input_type = None):
   plt.savefig('gaps.png')
   plt.clf()
 
+  print([run["in_path"] for run in non_optimal_runs])
+
 if __name__ == '__main__':
   fire.Fire()
