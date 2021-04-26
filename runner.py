@@ -82,7 +82,7 @@ def solver_loop(input_dir="inputs", output_dir="outputs", input_type=None):
         "existing_solution": None,
         "max_cities": max_cities,
         "max_edges": max_edges,
-        "last_timeout": 5,
+        "last_timeout": 1,
         "is_optimal": False,
         "best_gap": 100,
         "gap_change": 0,
@@ -132,9 +132,10 @@ def solver_loop(input_dir="inputs", output_dir="outputs", input_type=None):
       new_gap = solve_result[3] if solve_result else 100
       total_gaps -= next_task["best_gap"]
       total_gaps += new_gap
-      if next_task["existing_solution"] and new_gap > next_task["best_gap"]:
+      if next_task["existing_solution"] and next_task["best_gap"] != 100 and new_gap > next_task["best_gap"]:
         orig_best = next_task["best_gap"]
         print(f"WARNING WARNING WARNING WARNING: new gap {new_gap} was larger than previous best gap {orig_best}")
+        new_gap = orig_best
 
       new_task = {
         "in_path": next_task["in_path"],
@@ -144,8 +145,8 @@ def solver_loop(input_dir="inputs", output_dir="outputs", input_type=None):
         "max_edges": next_task["max_edges"],
         "last_timeout": next_timeout,
         "is_optimal": (solve_result != None) and solve_result[2],
-        "best_gap": min(new_gap, next_task["best_gap"]),
-        "gap_change": min(new_gap, next_task["best_gap"]) - next_task["best_gap"],
+        "best_gap": new_gap,
+        "gap_change": new_gap - next_task["best_gap"] if (next_task["existing_solution"] and next_task["best_gap"] != 100) else 0,
         "timeout_change": timeout_delta
       }
 
