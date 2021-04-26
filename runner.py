@@ -123,10 +123,17 @@ def solver_loop(input_dir="inputs", output_dir="outputs", input_type=None):
         next_timeout, next_task["existing_solution"]
       )
 
+      prev_score = 0
+      if next_task["existing_solution"]:
+        prev_score = calculate_score(G, next_task["existing_solution"][0], next_task["existing_solution"][1])
+      new_score = 0
       if solve_result:
         assert is_valid_solution(G, solve_result[0], solve_result[1])
+        new_score = calculate_score(G, solve_result[0], solve_result[1])
+
+      if solve_result and new_score > prev_score:
         write_output_file(G, solve_result[0], solve_result[1], next_task["out_path"])
-        print("Shortest Path Difference: {}".format(calculate_score(G, solve_result[0], solve_result[1])))
+        print(f"Shortest Path Difference: {new_score}")
         if solve_result[2]:
           non_optimal_count -= 1
       new_gap = solve_result[3] if solve_result else 100
@@ -140,7 +147,7 @@ def solver_loop(input_dir="inputs", output_dir="outputs", input_type=None):
       new_task = {
         "in_path": next_task["in_path"],
         "out_path": next_task["out_path"],
-        "existing_solution": (solve_result[0], solve_result[1]) if solve_result else None,
+        "existing_solution": (solve_result[0], solve_result[1]) if solve_result and new_score > prev_score else next_task["existing_solution"],
         "max_cities": next_task["max_cities"],
         "max_edges": next_task["max_edges"],
         "last_timeout": next_timeout,
