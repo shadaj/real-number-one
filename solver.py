@@ -63,7 +63,7 @@ def solve(G: nx.Graph, max_c, max_k, timeout, existing_solution):
     for node in G:
         # immediately force the distance to infinity if we skip the node
         model += distance_to_node[node] >= skipped_nodes[node] * fake_infinity
-        model += distance_to_node[node] <= (1 - skipped_nodes[node]) * 1e12 + skipped_nodes[node] * fake_infinity
+        model += distance_to_node[node] <= fake_infinity
 
     for node in G:
         if node != 0:
@@ -73,8 +73,6 @@ def solve(G: nx.Graph, max_c, max_k, timeout, existing_solution):
 
     model += xsum([var for var, _ in skipped_edges]) - xsum([skipped_nodes[i] * len(G[i]) for i in G]) <= max_k
     model += xsum(skipped_nodes) <= max_c
-    for node in G:
-        model += distance_to_node[node] <= fake_infinity
 
     model.objective = maximize(distance_to_node[len(G) - 1])
     # these cuts are used more often but aggressively using them doesn't seem to help
