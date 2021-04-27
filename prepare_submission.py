@@ -20,5 +20,5 @@ if __name__ == '__main__':
                     scores[graph_name] = round(read_output_file(G, output_file) * 1000) / 1000
     with open(submission_name, 'w') as f:
         f.write(json.dumps(submission))
-    with open("scores.json", 'w') as f:
+    with open("../real-number-one-leaderboard/scores.json", 'w') as f:
         f.write(json.dumps(scores))
