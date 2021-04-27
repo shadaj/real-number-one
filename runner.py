@@ -20,17 +20,17 @@ class PrioritizedItem:
   @property
   def estimated_timeout_to_complete(self):
     if self.item["existing_solution"] == None:
-      return self.item["last_timeout"] * 4, self.item["last_timeout"] * 4
+      return self.item["last_timeout"] * 4
     elif abs(self.item["gap_change"]) <= 0.0001 or self.item["gap_change"] > 0:
-      return self.item["last_timeout"] * 4, self.item["last_timeout"] * 4
+      return self.item["last_timeout"] * 4
     else:
       seconds_per_change = self.item["timeout_change"] / -self.item["gap_change"]
       time_for_remaining_gap = self.item["best_gap"] * seconds_per_change
-      return round(self.item["last_timeout"] + time_for_remaining_gap), round(self.item["last_timeout"] + time_for_remaining_gap * 2)
+      return round(self.item["last_timeout"] + time_for_remaining_gap)
 
   @property
   def priority_func(self):
-    tight_estimate, _ = self.estimated_timeout_to_complete
+    tight_estimate = self.estimated_timeout_to_complete
     return (tight_estimate, self.item["last_timeout"], self.item["best_gap"])
   
   def __eq__(self, o: "PrioritizedItem") -> bool:
@@ -106,7 +106,7 @@ def solver_loop(input_dir="inputs", output_dir="outputs", input_type=None):
     next_task = next_task_wrap.item
     if not next_task["is_optimal"]:
       G = read_input_file(next_task["in_path"])
-      _, next_timeout = next_task_wrap.estimated_timeout_to_complete
+      next_timeout = next_task_wrap.estimated_timeout_to_complete
       timeout_delta = next_timeout - next_task["last_timeout"]
       last_progress = next_task["gap_change"]
       in_path = next_task["in_path"]
