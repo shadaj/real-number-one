@@ -36,8 +36,6 @@ class PrioritizedItem:
     tight_estimate = self.estimated_timeout_to_complete
     pull_to_front_old_optimal = "is_optimal" in self.item and self.item["is_optimal"]
     pull_to_front_known = "known_nonoptimal" in self.item and self.item["known_nonoptimal"]
-    if pull_to_front_old_optimal:
-      print(self.item)
     return (0 if pull_to_front_old_optimal else 1, 0 if pull_to_front_known else 1, tight_estimate, self.item["last_timeout"], self.item["best_gap"])
   
   def __eq__(self, o: "PrioritizedItem") -> bool:
