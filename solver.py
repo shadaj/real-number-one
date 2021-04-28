@@ -19,7 +19,7 @@ def solve(G: nx.Graph, max_c, max_k, timeout, existing_solution):
     """
     model = Model()
     model.threads = int(os.getenv("THREAD_COUNT", "24"))
-    model.max_mip_gap_abs = 0.0001
+    model.max_mip_gap = 1e-12
 
     skipped_nodes = [model.add_var(var_type=BINARY) for node in G]
 
