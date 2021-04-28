@@ -9,7 +9,7 @@ import os
 from mip import Model, CONTINUOUS, BINARY, maximize, xsum
 from mip.constants import OptimizationStatus
 
-def solve(G: nx.Graph, max_c, max_k, timeout, existing_solution):
+def solve(G: nx.Graph, max_c, max_k, timeout, existing_solution, target_distance):
     """
     Args:
         G: networkx.Graph
@@ -73,6 +73,10 @@ def solve(G: nx.Graph, max_c, max_k, timeout, existing_solution):
 
     model += xsum([var for var, _ in skipped_edges]) - xsum([skipped_nodes[i] * len(G[i]) for i in G]) <= max_k
     model += xsum(skipped_nodes) <= max_c
+
+    if target_distance:
+        model += distance_to_node[len(G) - 1] >= target_distance
+        model += distance_to_node[len(G) - 1] <= target_distance
 
     model.objective = maximize(distance_to_node[len(G) - 1])
     # these cuts are used more often but aggressively using them doesn't seem to help

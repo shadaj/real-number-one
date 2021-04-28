@@ -1,3 +1,4 @@
+import networkx
 from solver import solve
 from parse import read_input_file, write_output_file
 from utils import is_valid_solution, calculate_score
@@ -73,7 +74,7 @@ def write_cached_run(input_path: str, result):
   with open(cache_path, "wb") as cache_file:
     return pickle.dump(result, cache_file)
 
-def solver_loop(input_dir="inputs", output_dir="outputs", input_type=None, team_number=None):
+def solver_loop(input_dir="inputs", output_dir="outputs", input_type=None, team_number=None, max_timeout=None, target_delta=None):
   inputs = get_all_inputs(input_dir, input_type, team_number)
   to_run_heap = []
   non_optimal_count = 0
@@ -108,12 +109,23 @@ def solver_loop(input_dir="inputs", output_dir="outputs", input_type=None, team_
     else:
       total_gaps += 0
 
+  if target_delta:
+    assert len(to_run_heap) == 1
+
+
   while len(to_run_heap) > 0:
     next_task_wrap = heapq.heappop(to_run_heap)
     next_task = next_task_wrap.item
     if not next_task["is_optimal_new"]:
       G = read_input_file(next_task["in_path"])
       next_timeout = next_task_wrap.estimated_timeout_to_complete
+      if max_timeout:
+        next_timeout = min(next_timeout, max_timeout)
+      target_distance = None
+      if target_delta:
+        original_min_dist = networkx.dijkstra_path_length(G, 0, len(G)-1)
+        target_distance = original_min_dist + target_delta
+
       timeout_delta = next_timeout - next_task["last_timeout"]
       last_progress = next_task["gap_change"]
       in_path = next_task["in_path"]
@@ -127,7 +139,8 @@ def solver_loop(input_dir="inputs", output_dir="outputs", input_type=None, team_
       print()
       solve_result = solve(
         G, next_task["max_cities"], next_task["max_edges"],
-        next_timeout, next_task["existing_solution"]
+        next_timeout, next_task["existing_solution"],
+        target_distance
       )
 
       prev_score = 0
@@ -151,22 +164,23 @@ def solver_loop(input_dir="inputs", output_dir="outputs", input_type=None, team_
         print(f"WARNING WARNING WARNING WARNING: new gap {new_gap} was larger than previous best gap {orig_best}")
         new_gap = orig_best
 
-      new_task = {
-        "in_path": next_task["in_path"],
-        "out_path": next_task["out_path"],
-        "existing_solution": (solve_result[0], solve_result[1]) if solve_result and new_score > prev_score else next_task["existing_solution"],
-        "max_cities": next_task["max_cities"],
-        "max_edges": next_task["max_edges"],
-        "last_timeout": next_timeout,
-        "is_optimal_new": (solve_result != None) and solve_result[2],
-        "best_gap": new_gap,
-        "gap_change": new_gap - next_task["best_gap"] if (next_task["existing_solution"] and next_task["best_gap"] != 100) else 0,
-        "timeout_change": timeout_delta
-      }
+      if timeout_delta > 0 or (solve_result and new_score > prev_score) or (new_gap > next_task["best_gap"]):
+        new_task = {
+          "in_path": next_task["in_path"],
+          "out_path": next_task["out_path"],
+          "existing_solution": (solve_result[0], solve_result[1]) if solve_result and new_score > prev_score else next_task["existing_solution"],
+          "max_cities": next_task["max_cities"],
+          "max_edges": next_task["max_edges"],
+          "last_timeout": next_timeout,
+          "is_optimal_new": (not target_distance) and (solve_result != None) and solve_result[2],
+          "best_gap": new_gap,
+          "gap_change": new_gap - next_task["best_gap"] if (next_task["existing_solution"] and next_task["best_gap"] != 100) else 0,
+          "timeout_change": timeout_delta
+        }
+        write_cached_run(new_task["in_path"], new_task)
 
-      write_cached_run(new_task["in_path"], new_task)
-      if not new_task["is_optimal_new"]:
-        heapq.heappush(to_run_heap, PrioritizedItem(new_task))
+        if not new_task["is_optimal_new"]:
+          heapq.heappush(to_run_heap, PrioritizedItem(new_task))
 
 def stats(input_dir="inputs", input_type = None):
   import matplotlib.pyplot as plt
@@ -185,8 +199,8 @@ def stats(input_dir="inputs", input_type = None):
 
   print(f"Total Inputs: {len(inputs)}")    
   print(f"Total Runned Inputs: {len(cached_runs)}")
-  optimal_runs = [run for run in cached_runs if run["is_optimal_new"]]
-  non_optimal_runs = [run for run in cached_runs if not run["is_optimal_new"]]
+  optimal_runs = [run for run in cached_runs if "is_optimal_new" in run and run["is_optimal_new"]]
+  non_optimal_runs = [run for run in cached_runs if not run in optimal_runs]
   has_solution = [run for run in cached_runs if run["existing_solution"]]
   print(f"Optimal Count: {len(optimal_runs)}")
   print(f"Has Solution: {len(has_solution)}")
