@@ -35,7 +35,10 @@ class PrioritizedItem:
   def priority_func(self):
     tight_estimate = self.estimated_timeout_to_complete
     pull_to_front_old_optimal = "is_optimal" in self.item and self.item["is_optimal"]
-    return (0 if pull_to_front_old_optimal else 1, tight_estimate, self.item["last_timeout"], self.item["best_gap"])
+    pull_to_front_known = "known_nonoptimal" in self.item and self.item["known_nonoptimal"]
+    if pull_to_front_old_optimal:
+      print(self.item)
+    return (0 if pull_to_front_old_optimal else 1, 0 if pull_to_front_known else 1, tight_estimate, self.item["last_timeout"], self.item["best_gap"])
   
   def __eq__(self, o: "PrioritizedItem") -> bool:
     return self.priority_func == o.priority_func
@@ -177,6 +180,8 @@ def solver_loop(input_dir="inputs", output_dir="outputs", input_type=None, team_
           "gap_change": new_gap - next_task["best_gap"] if (next_task["existing_solution"] and next_task["best_gap"] != 100) else 0,
           "timeout_change": timeout_delta
         }
+        if "known_nonoptimal" in next_task and not (solve_result and new_score > prev_score):
+          new_task["known_nonoptimal"] = True
         write_cached_run(new_task["in_path"], new_task)
 
         if not new_task["is_optimal_new"]:
@@ -214,6 +219,14 @@ def stats(input_dir="inputs", input_type = None):
   plt.clf()
 
   print([run["in_path"] for run in non_optimal_runs])
+
+def mark_nonoptimal(input_dir="inputs", input_type=None, team_number=None):
+  inputs = get_all_inputs(input_dir, input_type, team_number)
+  assert len(inputs) == 1
+  for input_path, max_cities, max_edges in inputs:
+    cached = get_cached_run(input_path)
+    cached["known_nonoptimal"] = True
+    write_cached_run(cached["in_path"], cached)
 
 if __name__ == '__main__':
   fire.Fire()
