@@ -166,7 +166,7 @@ def solver_loop(input_dir="inputs", output_dir="outputs", input_type=None, team_
         print(f"WARNING WARNING WARNING WARNING: new gap {new_gap} was larger than previous best gap {orig_best}")
         new_gap = orig_best
 
-      if timeout_delta > 0 or better_result or (new_gap > next_task["best_gap"]):
+      if timeout_delta > 0 or better_result or (new_gap > next_task["best_gap"]) or "is_optimal_new" not in next_task:
         new_task = {
           "in_path": next_task["in_path"],
           "out_path": next_task["out_path"],
@@ -224,7 +224,7 @@ def mark_nonoptimal(input_dir="inputs", input_type=None, team_number=None):
   assert len(inputs) == 1
   for input_path, max_cities, max_edges in inputs:
     cached = get_cached_run(input_path)
-    assert not cached["is_optimal_new"]
+    assert "is_optimal_new" not in cached or not cached["is_optimal_new"]
     cached["known_nonoptimal"] = True
     write_cached_run(cached["in_path"], cached)
 
