@@ -224,6 +224,7 @@ def mark_nonoptimal(input_dir="inputs", input_type=None, team_number=None):
   assert len(inputs) == 1
   for input_path, max_cities, max_edges in inputs:
     cached = get_cached_run(input_path)
+    assert not cached["is_optimal_new"]
     cached["known_nonoptimal"] = True
     write_cached_run(cached["in_path"], cached)
 
