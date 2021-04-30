@@ -179,7 +179,7 @@ def solver_loop(input_dir="inputs", output_dir="outputs", input_type=None, team_
           "gap_change": new_gap - next_task["best_gap"] if (next_task["existing_solution"] and next_task["best_gap"] != 100) else 0,
           "timeout_change": max(timeout_delta, 0)
         }
-        if "known_nonoptimal" in next_task and not (solve_result and new_score > prev_score):
+        if "known_nonoptimal" in next_task and not better_result:
           new_task["known_nonoptimal"] = True
         write_cached_run(new_task["in_path"], new_task)
 
