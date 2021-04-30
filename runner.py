@@ -20,7 +20,7 @@ class PrioritizedItem:
 
   @property
   def estimated_timeout_to_complete(self):
-    if "is_optimal" in self.item and self.item["is_optimal"]:
+    if ("is_optimal" in self.item and self.item["is_optimal"]) or self.item["timeout_change"] <= 0:
       return self.item["last_timeout"] * 2
     elif self.item["existing_solution"] == None:
       return self.item["last_timeout"] * 4
@@ -152,7 +152,8 @@ def solver_loop(input_dir="inputs", output_dir="outputs", input_type=None, team_
         assert is_valid_solution(G, solve_result[0], solve_result[1])
         new_score = calculate_score(G, solve_result[0], solve_result[1])
 
-      if solve_result and new_score > prev_score:
+      better_result = solve_result and (new_score - prev_score) >= 0.0001
+      if better_result:
         write_output_file(G, solve_result[0], solve_result[1], next_task["out_path"])
         print(f"Shortest Path Difference: {new_score}")
       if solve_result and solve_result[2]:
@@ -165,7 +166,7 @@ def solver_loop(input_dir="inputs", output_dir="outputs", input_type=None, team_
         print(f"WARNING WARNING WARNING WARNING: new gap {new_gap} was larger than previous best gap {orig_best}")
         new_gap = orig_best
 
-      if timeout_delta > 0 or (solve_result and new_score > prev_score) or (new_gap > next_task["best_gap"]):
+      if timeout_delta > 0 or better_result or (new_gap > next_task["best_gap"]):
         new_task = {
           "in_path": next_task["in_path"],
           "out_path": next_task["out_path"],
@@ -176,7 +177,7 @@ def solver_loop(input_dir="inputs", output_dir="outputs", input_type=None, team_
           "is_optimal_new": (not target_distance) and (solve_result != None) and solve_result[2],
           "best_gap": new_gap,
           "gap_change": new_gap - next_task["best_gap"] if (next_task["existing_solution"] and next_task["best_gap"] != 100) else 0,
-          "timeout_change": timeout_delta
+          "timeout_change": max(timeout_delta, 0)
         }
         if "known_nonoptimal" in next_task and not (solve_result and new_score > prev_score):
           new_task["known_nonoptimal"] = True
