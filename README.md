@@ -1,5 +1,7 @@
 # CS 170 Project Spring 2021
 
+[Leaderboard](https://shadaj.github.io/real-number-one-leaderboard/)
+
 Take a look at the project spec before you get started!
 
 Requirements:
