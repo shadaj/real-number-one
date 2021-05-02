@@ -23,20 +23,20 @@ class PrioritizedItem:
     if ("is_optimal" in self.item and self.item["is_optimal"]) or self.item["timeout_change"] <= 0:
       return self.item["last_timeout"] * 2
     elif self.item["existing_solution"] == None:
-      return self.item["last_timeout"] * 4
+      return self.item["last_timeout"] * 2
     elif abs(self.item["gap_change"]) <= 0.0001 or self.item["gap_change"] > 0:
-      return self.item["last_timeout"] * 4
+      return self.item["last_timeout"] * 2
     else:
       seconds_per_change = self.item["timeout_change"] / -self.item["gap_change"]
       time_for_remaining_gap = self.item["best_gap"] * seconds_per_change
-      return round(self.item["last_timeout"] + time_for_remaining_gap)
+      return min(round(self.item["last_timeout"] + time_for_remaining_gap), self.item["last_timeout"] * 2)
 
   @property
   def priority_func(self):
     tight_estimate = self.estimated_timeout_to_complete
     pull_to_front_old_optimal = "is_optimal" in self.item and self.item["is_optimal"]
     pull_to_front_known = "known_nonoptimal" in self.item and self.item["known_nonoptimal"]
-    return (0 if pull_to_front_old_optimal else 1, 0 if pull_to_front_known else 1, tight_estimate, self.item["last_timeout"], self.item["best_gap"])
+    return (0 if pull_to_front_known else 1, 0 if pull_to_front_old_optimal else 1, tight_estimate, self.item["last_timeout"], self.item["best_gap"])
   
   def __eq__(self, o: "PrioritizedItem") -> bool:
     return self.priority_func == o.priority_func
@@ -104,6 +104,8 @@ def solver_loop(input_dir="inputs", output_dir="outputs", input_type=None, team_
         cached["timeout_change"] = cached["last_timeout"] / 2
       if "is_optimal_new" not in cached:
         cached["is_optimal_new"] = False
+      if "known_nonoptimal" in cached and cached["known_nonoptimal"]:
+        cached["last_timeout"] = 60
       heapq.heappush(to_run_heap, PrioritizedItem(cached))
       non_optimal_count += 1
       total_gaps += cached["best_gap"]
