@@ -104,8 +104,8 @@ def solver_loop(input_dir="inputs", output_dir="outputs", input_type=None, team_
         cached["timeout_change"] = cached["last_timeout"] / 2
       if "is_optimal_new" not in cached:
         cached["is_optimal_new"] = False
-      if "known_nonoptimal" in cached and cached["known_nonoptimal"]:
-        cached["last_timeout"] = 60
+      # if "known_nonoptimal" in cached and cached["known_nonoptimal"]:
+      #   cached["last_timeout"] = 60
       heapq.heappush(to_run_heap, PrioritizedItem(cached))
       non_optimal_count += 1
       total_gaps += cached["best_gap"]
